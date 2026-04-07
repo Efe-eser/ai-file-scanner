@@ -105,11 +105,12 @@
         </form>
 
         <div class="loading" id="loading">Analyzing...</div>
-
         <div id="output"></div>
     </div>
 
     <script>
+        const API_URL = "http://51.21.245.128:8000";
+
         document.getElementById("uploadForm").addEventListener("submit", async function(e) {
         e.preventDefault();
 
@@ -117,10 +118,17 @@
         document.getElementById("output").innerHTML = "";
 
         let file = document.querySelector("input[type=file]").files[0];
+
+        if (!file) {
+        alert("Dosya seç!");
+        return;
+        }
+
         let formData = new FormData();
         formData.append("file", file);
 
-        let res = await fetch("/api/upload/", {
+        try {
+        let res = await fetch(`${API_URL}/api/upload/`, {
         method: "POST",
         body: formData
         });
@@ -166,6 +174,11 @@
         }
         </div>
         `;
+
+        } catch (err) {
+        console.error(err);
+        document.getElementById("loading").innerText = "ERROR!";
+        }
         });
     </script>
 

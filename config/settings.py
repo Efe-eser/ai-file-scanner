@@ -30,6 +30,7 @@ INSTALLED_APPS = [
 
     'rest_framework',
     'scanner',
+    "corsheaders",
 ]
 
 
@@ -37,6 +38,7 @@ INSTALLED_APPS = [
 # MIDDLEWARE
 # -----------------------------
 MIDDLEWARE = [
+    "corsheaders.middleware.CorsMiddleware",
     'django.middleware.security.SecurityMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
@@ -132,3 +134,5 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 # -----------------------------
 # 🔥 VirusTotal API Key
 VT_API_KEY = os.getenv("VT_API_KEY")
+
+CORS_ALLOW_ALL_ORIGINS = True

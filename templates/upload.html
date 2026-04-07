@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>AI File Scanner</title>
+
+    <style>
+        body {
+            margin: 0;
+            height: 100vh;
+            background: radial-gradient(circle at top, #1e293b, #020617);
+            font-family: Arial, sans-serif;
+            color: white;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .card {
+            backdrop-filter: blur(20px);
+            background: rgba(255,255,255,0.05);
+            border-radius: 20px;
+            padding: 40px;
+            width: 450px;
+            text-align: center;
+            box-shadow: 0 0 40px rgba(0,255,150,0.1);
+        }
+
+        h1 {
+            margin-bottom: 20px;
+            background: linear-gradient(90deg, #22c55e, #38bdf8);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        button {
+            background: linear-gradient(90deg, #22c55e, #4ade80);
+            border: none;
+            padding: 12px 25px;
+            border-radius: 10px;
+            color: white;
+            cursor: pointer;
+            font-size: 16px;
+        }
+
+        .status {
+            font-size: 24px;
+            font-weight: bold;
+            margin-top: 20px;
+        }
+
+        .safe {
+            color: #22c55e;
+        }
+
+        .suspicious {
+            color: #facc15;
+        }
+
+        .malicious {
+            color: #ef4444;
+        }
+
+        .bar {
+            height: 12px;
+            background: #1e293b;
+            border-radius: 6px;
+            margin-top: 10px;
+            overflow: hidden;
+        }
+
+        .bar-fill {
+            height: 100%;
+            width: 0%;
+            background: linear-gradient(90deg, #22c55e, #ef4444);
+            transition: 0.5s;
+        }
+
+        .section {
+            margin-top: 20px;
+            text-align: left;
+        }
+
+        .box {
+            background: rgba(255,255,255,0.05);
+            padding: 10px;
+            border-radius: 10px;
+            margin-top: 10px;
+        }
+
+        .loading {
+            margin-top: 15px;
+            display: none;
+        }
+    </style>
+</head>
+
+<body>
+
+    <div class="card">
+        <h1>AI File Scanner</h1>
+
+        <form id="uploadForm">
+            <input type="file" required><br><br>
+            <button type="submit">Scan File</button>
+        </form>
+
+        <div class="loading" id="loading">Analyzing...</div>
+
+        <div id="output"></div>
+    </div>
+
+    <script>
+        document.getElementById("uploadForm").addEventListener("submit", async function(e) {
+        e.preventDefault();
+
+        document.getElementById("loading").style.display = "block";
+        document.getElementById("output").innerHTML = "";
+
+        let file = document.querySelector("input[type=file]").files[0];
+        let formData = new FormData();
+        formData.append("file", file);
+
+        let res = await fetch("/api/upload/", {
+        method: "POST",
+        body: formData
+        });
+
+        let data = await res.json();
+
+        document.getElementById("loading").style.display = "none";
+
+        let statusClass = "safe";
+        if (data.status === "MALICIOUS") statusClass = "malicious";
+        else if (data.status === "SUSPICIOUS") statusClass = "suspicious";
+
+        document.getElementById("output").innerHTML = `
+        <div class="status ${statusClass}">
+        ${data.status}
+        </div>
+
+        <div class="section">
+        <b>Risk Score:</b> ${data.risk_score}%
+        <div class="bar">
+        <div class="bar-fill" style="width:${data.risk_score}%"></div>
+        </div>
+        </div>
+
+        <div class="section box">
+        <b>AI Comment:</b><br>
+        ${data.ai_comment}
+        </div>
+
+        <div class="section box">
+        <b>VirusTotal</b><br>
+        Malicious: ${data.vt_malicious}<br>
+        Suspicious: ${data.vt_suspicious}
+        </div>
+
+        <div class="section box">
+        <b>Analysis</b><br>
+        Entropy: ${data.entropy}<br>
+        Strings: ${
+        data.suspicious_strings.length > 0
+        ? data.suspicious_strings.join(", ")
+        : "None"
+        }
+        </div>
+        `;
+        });
+    </script>
+
+</body>
+</html>

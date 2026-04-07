@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>AI File Scanner</title>
+    <style>
+        body {
+            background-color: #0d1117;
+            color: #c9d1d9;
+            font-family: Arial, sans-serif;
+            text-align: center;
+            padding-top: 100px;
+        }
+
+        .container {
+            background: #161b22;
+            padding: 30px;
+            border-radius: 10px;
+            width: 400px;
+            margin: auto;
+        }
+
+        input[type="file"] {
+            margin: 15px 0;
+        }
+
+        button {
+            background: #238636;
+            border: none;
+            padding: 10px 20px;
+            color: white;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+
+        .result {
+            margin-top: 20px;
+            text-align: left;
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h2>AI File Scanner</h2>
+
+    <form method="POST" enctype="multipart/form-data">
+        {% csrf_token %}
+        <input type="file" name="file">
+        <br>
+        <button type="submit">Upload</button>
+    </form>
+
+    {% if result %}
+    <div class="result">
+        <p><b>Filename:</b> {{ result.filename }}</p>
+        <p><b>SHA256:</b> {{ result.sha256 }}</p>
+        <p><b>Size:</b> {{ result.file_size }}</p>
+        <p><b>Type:</b> {{ result.file_type }}</p>
+        <p><b>Risk Score:</b> {{ result.risk_score }}</p>
+    </div>
+    {% endif %}
+</div>
+
+</body>
+</html>

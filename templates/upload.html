@@ -64,27 +64,66 @@
             position: relative;
             z-index: 10;
             width: 100%;
-            max-width: 520px;
+            max-width: 700px;
             display: flex;
             align-items: center;
-            gap: 10px;
-            padding: 30px 20px 0;
+            gap: 14px;
+            padding: 30px 24px 0;
         }
 
         .logo-svg {
-            width: 34px;
-            height: 34px;
+            width: 54px;
+            height: 54px;
             flex-shrink: 0;
+            filter: drop-shadow(0 0 12px rgba(56,189,248,0.38));
         }
 
         .logo-name {
-            font-size: 1.1rem;
-            font-weight: 800;
-            letter-spacing: -0.02em;
-            background: linear-gradient(135deg, var(--accent), var(--accent2));
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
+            display: flex;
+            align-items: baseline;
+            gap: 0;
+            white-space: nowrap;
         }
+
+            .logo-name .part-file {
+                font-size: 1.5rem;
+                font-weight: 800;
+                letter-spacing: -0.03em;
+                background: linear-gradient(135deg, #e2e8f0 0%, #94a3b8 100%);
+                -webkit-background-clip: text;
+                -webkit-text-fill-color: transparent;
+            }
+
+            .logo-name .part-xray {
+                font-size: 1.5rem;
+                font-weight: 800;
+                letter-spacing: -0.03em;
+                background: linear-gradient(135deg, var(--accent) 0%, var(--accent2) 100%);
+                -webkit-background-clip: text;
+                -webkit-text-fill-color: transparent;
+            }
+
+            .logo-name .part-dot {
+                font-size: 1.5rem;
+                font-weight: 300;
+                color: rgba(56,189,248,0.35);
+                -webkit-text-fill-color: rgba(56,189,248,0.35);
+                margin: 0 2px;
+            }
+
+            .logo-name .part-sub {
+                font-family: 'JetBrains Mono', monospace;
+                font-size: 0.6rem;
+                font-weight: 500;
+                letter-spacing: 0.15em;
+                text-transform: uppercase;
+                align-self: center;
+                color: var(--muted);
+                -webkit-text-fill-color: var(--muted);
+                margin-left: 12px;
+                padding-left: 12px;
+                border-left: 1px solid rgba(56,189,248,0.18);
+            }
 
         .nav-pill {
             margin-left: auto;
@@ -93,8 +132,10 @@
             letter-spacing: 0.1em;
             color: var(--accent);
             border: 1px solid rgba(56,189,248,0.22);
-            padding: 3px 10px;
+            padding: 4px 12px;
             border-radius: 20px;
+            background: rgba(56,189,248,0.04);
+            white-space: nowrap;
         }
 
         main {
@@ -104,6 +145,8 @@
             max-width: 520px;
             padding: 24px 20px 60px;
             margin-top: 32px;
+            display: flex;
+            flex-direction: column;
         }
 
         .card {
@@ -537,6 +580,19 @@
                 border-color: rgba(56,189,248,.38);
             }
 
+        .ai-badge {
+            margin-top: 12px;
+            align-self: center;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.6rem;
+            letter-spacing: 0.12em;
+            color: var(--accent);
+            border: 1px solid rgba(56,189,248,0.22);
+            padding: 4px 12px;
+            border-radius: 20px;
+            background: rgba(56,189,248,0.04);
+        }
+
         @keyframes spin-arc {
             from {
                 transform: rotate(-90deg)
@@ -570,8 +626,11 @@
                 </linearGradient>
             </defs>
         </svg>
-        <div class="logo-name">AI File Scanner</div>
-        <div class="nav-pill">AI · POWERED</div>
+        <div class="logo-name">
+            <span class="part-file">File</span><span class="part-dot">·</span><span class="part-xray">X-ray</span>
+            <span class="part-sub">AI File Scanner</span>
+        </div>
+
     </nav>
 
     <main>
@@ -649,18 +708,15 @@
             <div id="result"></div>
 
         </div>
+        <div class="ai-badge">AI · POWERED</div>
     </main>
 
     <script>
-        // 🔥 AUTO URL (EN KRİTİK FIX)
-        const API_URL = window.location.origin;
+        const API_URL = "http://51.21.245.128:8000";
 
         document.getElementById("fileInput").addEventListener("change", function() {
         const fc = document.getElementById("fileChosen");
-        if (this.files.length) {
-        fc.textContent = this.files[0].name;
-        fc.style.display = "block";
-        }
+        if (this.files.length) { fc.textContent = this.files[0].name; fc.style.display = "block"; }
         });
 
         const STEPS = [
@@ -671,9 +727,7 @@
 
         document.getElementById("uploadForm").addEventListener("submit", async function(e) {
         e.preventDefault();
-
         let file = document.getElementById("fileInput").files[0];
-        const fileName = file.name;
         if (!file) return alert("Select a file first.");
 
         let formData = new FormData();
@@ -696,130 +750,93 @@
         }, 380);
 
         try {
-        let res = await fetch(`${API_URL}/api/upload/`, {
-        method: "POST",
-        body: formData
-        });
-
-        if (!res.ok) {
-        throw new Error("Server error: " + res.status);
-        }
-
+        let res  = await fetch(`${API_URL}/api/upload/`, { method: "POST", body: formData });
         let data = await res.json();
 
         clearInterval(interval);
         progFill.style.width = "100%";
         scanStatus.textContent = "COMPLETE";
-
-        setTimeout(() => showResult(data, fileName), 380);
+        setTimeout(() => showResult(data), 380);
 
         } catch(err) {
-        console.error(err);
-
         clearInterval(interval);
         document.getElementById("scanningBlock").style.display = "none";
         document.getElementById("uploadForm").style.display = "flex";
+        const r = document.getElementById("result");
+        r.style.display = "flex";
+        r.innerHTML = `<div style="font-family:'JetBrains Mono',monospace;font-size:.78rem;color:#ef4444;padding:12px 0;">CONNECTION ERROR — check server.</div>`;
+        }
+        });
+
+        function showResult(data) {
+        document.getElementById("scanningBlock").style.display = "none";
+
+        let cls = "safe";
+        if (data.status === "MALICIOUS")   cls = "malicious";
+        else if (data.status === "SUSPICIOUS") cls = "suspicious";
+
+        const score = data.risk_score || 0;
+        const colorMap = { safe:"#22c55e", suspicious:"#f59e0b", malicious:"#ef4444" };
+        const barColor = colorMap[cls];
 
         const r = document.getElementById("result");
         r.style.display = "flex";
         r.innerHTML = `
-        <div style="font-family:'JetBrains Mono',monospace;font-size:.78rem;color:#ef4444;padding:12px 0;">
-        CONNECTION ERROR — check server.
-        </div>`;
-        }
-        });
-
-        function showResult(data, fileName) {
-    document.getElementById("scanningBlock").style.display = "none";
-
-    let cls = "safe";
-    if (data.status === "MALICIOUS") cls = "malicious";
-    else if (data.status === "SUSPICIOUS") cls = "suspicious";
-
-    const score = data.risk_score || 0;
-
-    const r = document.getElementById("result");
-    r.style.display = "flex";
-
-    r.innerHTML = `
-        <!-- 🔥 FILE NAME -->
-        <div style="margin-bottom:12px;font-size:.8rem;color:#94a3b8;">
-            📄 File: <span style="color:#38bdf8">${fileName}</span>
-        </div>
-
         <div class="verdict-row">
-            <div>
-                <div class="verdict-label">Threat Assessment</div>
-                <div class="status ${cls}">${data.status}</div>
-            </div>
-            <div class="score-badge">
-                ${score}%
-                <small>RISK SCORE</small>
-            </div>
+        <div>
+        <div class="verdict-label">Threat Assessment</div>
+        <div class="status ${cls}">${data.status}</div>
+        </div>
+        <div class="score-badge" style="color:${barColor}">
+        ${score}%
+        <small>RISK SCORE</small>
+        </div>
         </div>
 
         <div class="risk-bar-track">
-            <div class="risk-bar-fill" id="riskBar"></div>
+        <div class="risk-bar-fill" id="riskBar" style="background:${barColor}"></div>
         </div>
 
-        <!-- 🔥 AI COMMENT -->
+        ${data.ai_comment ? `
         <div class="info-block">
-            <div class="block-title">AI Analysis</div>
-            <p class="ai-text">${data.ai_comment}</p>
-        </div>
+        <div class="block-title">AI Analysis</div>
+        <p class="ai-text">${data.ai_comment}</p>
+        </div>` : ""}
 
-        <!-- 🔥 VIRUSTOTAL -->
+        ${data.vt_malicious !== undefined ? `
         <div class="info-block">
-            <div class="block-title">VirusTotal</div>
-
-            <div class="block-row">
-                <span class="block-row-key">Malicious</span>
-                <span class="block-row-val" style="color:${data.vt_malicious > 0 ? '#ef4444' : '#22c55e'}">
-                    ${data.vt_malicious}
-                </span>
-            </div>
-
-            <div class="block-row">
-                <span class="block-row-key">Suspicious</span>
-                <span class="block-row-val" style="color:${data.vt_suspicious > 0 ? '#f59e0b' : '#22c55e'}">
-                    ${data.vt_suspicious}
-                </span>
-            </div>
+        <div class="block-title">VirusTotal</div>
+        <div class="block-row">
+        <span class="block-row-key">Malicious</span>
+        <span class="block-row-val" style="color:${data.vt_malicious > 0 ? '#ef4444' : '#22c55e'}">${data.vt_malicious}</span>
         </div>
+        <div class="block-row">
+        <span class="block-row-key">Suspicious</span>
+        <span class="block-row-val" style="color:${data.vt_suspicious > 0 ? '#f59e0b' : '#22c55e'}">${data.vt_suspicious}</span>
+        </div>
+        </div>` : ""}
 
-        <!-- 🔥 ANALYSIS -->
+        ${data.entropy !== undefined ? `
         <div class="info-block">
-            <div class="block-title">Static Analysis</div>
-
-            <div class="block-row">
-                <span class="block-row-key">Entropy</span>
-                <span class="block-row-val" style="color:#38bdf8">
-                    ${data.entropy}
-                </span>
-            </div>
-
-            <div class="block-row">
-                <span class="block-row-key">Strings</span>
-                <span class="block-row-val">
-                    ${
-                        data.suspicious_strings && data.suspicious_strings.length > 0
-                        ? data.suspicious_strings.join(", ")
-                        : "None"
-                    }
-                </span>
-            </div>
+        <div class="block-title">Static Analysis</div>
+        <div class="block-row">
+        <span class="block-row-key">Entropy</span>
+        <span class="block-row-val" style="color:#38bdf8">${data.entropy}</span>
         </div>
+        <div class="block-row">
+        <span class="block-row-key">Strings</span>
+        <span class="block-row-val" style="color:${data.strings && data.strings !== 'None' ? '#f59e0b' : '#38bdf8'}">${data.strings || 'None'}</span>
+        </div>
+        </div>` : ""}
 
-        <button class="reset-btn" onclick="resetScanner()">
-            ← Scan Another File
-        </button>
-    `;
+        <button class="reset-btn" onclick="resetScanner()">&#8592; Scan Another File</button>
+        `;
 
-    setTimeout(() => {
+        setTimeout(() => {
         const bar = document.getElementById("riskBar");
         if (bar) bar.style.width = Math.min(score, 100) + "%";
-    }, 80);
-}
+        }, 80);
+        }
 
         function resetScanner() {
         document.getElementById("fileInput").value = "";

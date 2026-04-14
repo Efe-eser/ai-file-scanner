@@ -5,3 +5,7 @@ __pycache__/
 db.sqlite3
 .vs/
 uploads/
+
+# locally generated test artifacts (keep sources/scripts only)
+test_samples/high_entropy.bin
+test_samples/eicar.com.txt

@@ -6,8 +6,10 @@ django-cors-headers==4.9.0
 djangorestframework==3.17.0
 idna==3.11
 joblib==1.5.3
+pefile==2024.8.26
 python-dotenv==1.2.2
 requests==2.33.1
+signify==0.7.1
 sqlparse==0.5.5
 tzdata==2025.3
 urllib3==2.6.3

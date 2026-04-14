@@ -1,0 +1,6 @@
+This is the EICAR test string, stored in Base64 to avoid AV quarantine in the repo.
+Decode it to get the raw `eicar.com.txt` content.
+
+Base64:
+WDVPIVAlQEFQWzRcUFpYNTRQUF4pN0NDKTd9JEVJQ0FSLVNUQU5EQVJELUFOVElWSVJVUy1URVNULUZJTEUhJEgrSCo=
+

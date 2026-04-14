@@ -11,6 +11,7 @@ import math
 from collections import Counter
 import joblib
 import struct
+import platform
 
 from .serializers import FileSerializer
 from openai import OpenAI
@@ -306,7 +307,17 @@ def identify_application(filename, file_data, vt_malicious, vt_suspicious):
 # ----------------------------
 # AI ANALİZ
 # ----------------------------
-def get_ai_analysis(filename, ext, file_size, final_score, entropy, strings_found, vt_malicious, vt_suspicious):
+def get_ai_analysis(
+    filename,
+    ext,
+    file_size,
+    final_score,
+    entropy,
+    strings_found,
+    vt_malicious,
+    vt_suspicious,
+    app_info=None,
+):
     truly_suspicious = [s for s in strings_found if s in [
         "cmd.exe", "powershell", "wget", "curl", "base64",
         "shell", "chmod", "eval", "invoke-expression",
@@ -314,10 +325,22 @@ def get_ai_analysis(filename, ext, file_size, final_score, entropy, strings_foun
         "regsvr32", "mshta", "rundll32",
     ]]
 
-    prompt = f"""You are a concise cybersecurity analyst. Analyze this file in 2-3 sentences max.
-Be direct. State if safe or dangerous and the main reason. Don't repeat UI numbers.
+    app_info = app_info or {}
+    certified = bool(app_info.get("certified"))
+    verified = bool(app_info.get("verified"))
+    app_name = app_info.get("app_name") or ""
+    publisher = app_info.get("publisher") or ""
+
+    prompt = f"""You are a user-friendly cybersecurity analyst.
+Write in English. Maximum 2 short sentences.
+
+1) The first word MUST be one label: SAFE / SUSPICIOUS / MALICIOUS
+2) Then give one clear reason (no hedging).
+3) If the digital signature is valid, explicitly say it and avoid unnecessary warnings.
+4) Do NOT repeat UI numbers (risk/entropy); interpret them.
 
 File: {filename} | Type: {ext} | Size: {round(file_size/1024,1)} KB
+Signed/Verified: certified={certified}, signature_valid={verified}, publisher="{publisher}", app="{app_name}"
 Risk: {final_score}/100 | Entropy: {entropy}
 Suspicious indicators: {truly_suspicious if truly_suspicious else 'None'}
 VirusTotal: {vt_malicious} malicious, {vt_suspicious} suspicious"""
@@ -439,6 +462,40 @@ def determine_status(score, vm):
     elif score >= 35: return "SUSPICIOUS"
     return "SAFE"
 
+def has_strong_indicators(strings_found):
+    """
+    "shell" alone is too generic; focus on stronger, execution-related indicators.
+    """
+    strong = {
+        "cmd.exe",
+        "powershell",
+        "invoke-expression",
+        "downloadstring",
+        "wscript",
+        "createobject",
+        "regsvr32",
+        "mshta",
+        "rundll32",
+    }
+    return any(s in strong for s in (strings_found or []))
+
+def get_quick_comment(filename, app_info, final_score, vt_malicious, vt_suspicious):
+    """
+    No-OpenAI lightweight explanation used on initial scan.
+    Users can optionally request AI analysis via separate endpoint.
+    """
+    if app_info.get("certified"):
+        return "This file is digitally signed and VirusTotal reports no threats. Marked as verified."
+    if vt_malicious > 0:
+        return "VirusTotal reports malicious detections. Treat this file as unsafe."
+    if vt_suspicious > 0:
+        return "VirusTotal reports suspicious detections. Review carefully before running."
+    if app_info.get("app_name"):
+        return f"Recognized as {app_info['app_name']}. No VirusTotal threats were found, but this scan is heuristic."
+    if final_score < 35:
+        return "No significant threats detected. This scan is heuristic; you can request AI analysis for a second opinion."
+    return "Some risk indicators were detected. Consider requesting AI analysis for a deeper explanation."
+
 
 # ----------------------------
 # API VIEW
@@ -478,6 +535,8 @@ class FileUploadView(APIView):
         # ── SERTİFİKALI → Risk skoru 0, AI yok ──────────
         if app_info["certified"]:
             instance.risk_score = 0
+            instance.ai_comment = "This file is digitally signed and VirusTotal reports no threats. Marked as verified."
+            instance.ai_generated = False
             instance.save()
 
             pub    = app_info["publisher"] or ""
@@ -485,9 +544,12 @@ class FileUploadView(APIView):
             name   = app_info["app_name"]  or "Verified Application"
 
             return Response({
+                "file_id":            instance.id,
                 "status":             "SAFE",
                 "risk_score":         0,
-                "ai_comment":         "This file carries a valid Authenticode signature. No threats detected.",
+                "ai_comment":         instance.ai_comment,
+                "ai_generated":       False,
+                "ai_available":       bool(os.getenv("OPENAI_API_KEY")),
                 "certified":          True,
                 "verified":           app_info["verified"],
                 "app_name":           name,
@@ -504,24 +566,27 @@ class FileUploadView(APIView):
         entropy_s = get_entropy_score(entropy)
         ml_s, _   = get_ml_score(entropy, file.size, string_count, vt_malicious, vt_suspicious)
         final     = calculate_final_score(rule_s, entropy_s, vt_score, ml_s, vt_malicious)
+        # Heuristic guardrails: scripts with strong execution indicators shouldn't be marked SAFE.
+        if ext in [".bat", ".cmd", ".ps1", ".vbs", ".js", ".scr"] and has_strong_indicators(strings_found):
+            final = max(final, 45)  # ensure at least SUSPICIOUS
         stat      = determine_status(final, vt_malicious)
 
-        # AI kararı
+        # Initial scan: NO OpenAI call (token-saving). Provide quick heuristic summary.
         kname = app_info["app_name"]
-        if kname and vt_malicious == 0 and vt_suspicious == 0:
-            ai_comment = f"Recognized as {kname}. VirusTotal reports no threats. File appears safe."
-        elif vt_malicious == 0 and vt_suspicious == 0 and final < 35:
-            ai_comment = "No significant threats detected. VirusTotal is clean and risk indicators are low."
-        else:
-            ai_comment = get_ai_analysis(filename, ext, file.size, final, entropy, strings_found, vt_malicious, vt_suspicious)
+        ai_comment = get_quick_comment(filename, app_info, final, vt_malicious, vt_suspicious)
+        instance.ai_comment = ai_comment
+        instance.ai_generated = False
 
         instance.risk_score = final
         instance.save()
 
         return Response({
+            "file_id":            instance.id,
             "status":             stat,
             "risk_score":         final,
             "ai_comment":         ai_comment,
+            "ai_generated":       False,
+            "ai_available":       bool(os.getenv("OPENAI_API_KEY")),
             "certified":          False,
             "verified":           False,
             "app_name":           kname,
@@ -532,3 +597,71 @@ class FileUploadView(APIView):
             "vt_malicious":       vt_malicious,
             "vt_suspicious":      vt_suspicious,
         }, status=status.HTTP_201_CREATED)
+
+
+class FileAIAnalysisView(APIView):
+    """
+    Optional OpenAI analysis endpoint. Call only when user clicks the button.
+    """
+    def post(self, request, file_id: int):
+        if not os.getenv("OPENAI_API_KEY"):
+            return Response({"detail": "OpenAI is not configured."}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
+
+        try:
+            from .models import UploadedFile
+            instance = UploadedFile.objects.get(id=file_id)
+        except Exception:
+            return Response({"detail": "File not found."}, status=status.HTTP_404_NOT_FOUND)
+
+        # Read file bytes from storage
+        try:
+            f = instance.file
+            f.open("rb")
+            file_data = f.read()
+            f.close()
+        except Exception:
+            return Response({"detail": "Unable to read file."}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+        filename = os.path.basename(instance.file.name)
+        ext = os.path.splitext(filename)[1].lower()
+        file_size = instance.file_size or len(file_data)
+
+        # Recompute analysis inputs deterministically
+        entropy = calculate_entropy(file_data)
+        strings_found = suspicious_strings(file_data)
+
+        # Use stored hash if present; otherwise compute
+        sha256 = instance.sha256
+        if not sha256:
+            sha256 = hashlib.sha256(file_data).hexdigest()
+
+        vt_malicious, vt_suspicious = check_virustotal(sha256)
+
+        # Use stored risk score as final score fallback
+        final_score = float(instance.risk_score or 0)
+
+        # Identify app + signature info (for clearer, confident AI summary)
+        app_info = identify_application(filename, file_data, vt_malicious, vt_suspicious)
+
+        # Produce AI analysis
+        ai_text = get_ai_analysis(
+            filename,
+            ext,
+            file_size,
+            final_score,
+            entropy,
+            strings_found,
+            vt_malicious,
+            vt_suspicious,
+            app_info=app_info,
+        )
+
+        instance.ai_comment = ai_text
+        instance.ai_generated = True
+        instance.save(update_fields=["ai_comment", "ai_generated"])
+
+        return Response({
+            "file_id": file_id,
+            "ai_comment": ai_text,
+            "ai_generated": True,
+        }, status=status.HTTP_200_OK)

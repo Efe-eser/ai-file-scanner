@@ -3,6 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <title>File X-ray — AI File Scanner</title>
+    <link rel="icon" type="image/x-icon" href="/static/favicon.ico">
     <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
     <style>
         :root {
@@ -686,6 +687,68 @@
             font-weight: 500
         }
 
+        /* help tooltip */
+        .help {
+            position: relative;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 16px;
+            height: 16px;
+            margin-left: 8px;
+            border-radius: 999px;
+            border: 1px solid rgba(56,189,248,.25);
+            color: var(--accent);
+            font-family: 'JetBrains Mono',monospace;
+            font-size: .62rem;
+            line-height: 1;
+            cursor: help;
+            opacity: .85;
+            background: rgba(56,189,248,.04);
+            flex-shrink: 0;
+        }
+
+        .help:hover { opacity: 1; }
+
+        .help .tip {
+            position: absolute;
+            left: 50%;
+            bottom: calc(100% + 10px);
+            transform: translateX(-50%);
+            width: 260px;
+            padding: 10px 10px;
+            border-radius: 10px;
+            border: 1px solid rgba(56,189,248,.18);
+            background: rgba(15,25,35,.96);
+            color: #cbd5e1;
+            font-family: 'JetBrains Mono',monospace;
+            font-size: .66rem;
+            line-height: 1.55;
+            letter-spacing: .02em;
+            box-shadow: 0 18px 40px rgba(0,0,0,.55);
+            display: none;
+            z-index: 50;
+            pointer-events: none;
+        }
+
+        .help .tip::after {
+            content: '';
+            position: absolute;
+            top: 100%;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 0;
+            height: 0;
+            border-left: 7px solid transparent;
+            border-right: 7px solid transparent;
+            border-top: 7px solid rgba(15,25,35,.96);
+            filter: drop-shadow(0 -1px 0 rgba(56,189,248,.18));
+        }
+
+        .help:hover .tip {
+            display: block;
+        }
+
         .ai-summary {
             font-family: 'JetBrains Mono',monospace;
             font-size: .78rem;
@@ -865,7 +928,7 @@
         if (this.files.length) { fc.textContent = this.files[0].name; fc.style.display = "block"; }
         });
 
-        const STEPS = ["INITIALIZING...","READING FILE HEADERS...","CHECKING SIGNATURES...","QUERYING VIRUSTOTAL...","RUNNING AI ANALYSIS...","COMPUTING RISK SCORE...","FINALIZING REPORT..."];
+        const STEPS = ["INITIALIZING...","READING FILE HEADERS...","CHECKING SIGNATURES...","QUERYING VIRUSTOTAL...","COMPUTING RISK SCORE...","FINALIZING REPORT..."];
 
         document.getElementById("uploadForm").addEventListener("submit", async function(e) {
         e.preventDefault();
@@ -907,11 +970,14 @@
         }
         });
 
+        let lastFileId = null;
+
         function showResult(data) {
         document.getElementById("scanningBlock").style.display = "none";
 
         const isCert = data.certified === true;
         const score  = data.risk_score || 0;
+        lastFileId = data.file_id || null;
 
         let cls = "safe";
         if (data.status === "MALICIOUS")    cls = "malicious";
@@ -925,6 +991,12 @@
         const cutIdx = full.search(/[.!?](\s|$)/);
         const summary = cutIdx > -1 ? full.slice(0, cutIdx + 1) : full;
         const detail  = cutIdx > -1 ? full.slice(cutIdx + 1).trim() : "";
+
+        const aiAvailable = data.ai_available === true;
+        const canRunAI = aiAvailable && lastFileId;
+        const aiBtnHtml = canRunAI
+          ? `<button class="reset-btn" style="margin-top:10px" id="aiRunBtn" onclick="runAIAnalysis()">Run AI Analysis</button>`
+          : "";
 
         // strings
         const strings  = data.suspicious_strings || [];
@@ -994,6 +1066,7 @@
         <button class="expand-btn" id="expandBtn" onclick="toggleDetail()">
         <span id="expandArrow" style="display:inline-block;transition:transform .2s">▼</span>&nbsp;Show details
         </button>` : ""}
+        ${aiBtnHtml}
         </div>
 
         <div class="info-block">
@@ -1011,11 +1084,19 @@
         <div class="info-block">
         <div class="block-title">Static Analysis</div>
         <div class="block-row">
-        <span class="block-row-key">Entropy</span>
+        <span class="block-row-key">Entropy
+          <span class="help">?
+            <span class="tip">Entropy estimates how “random/packed” the file looks. Very high entropy can indicate compression or obfuscation, which may be suspicious in executables.</span>
+          </span>
+        </span>
         <span class="block-row-val" style="color:${data.entropy > 7.2 ? '#f59e0b' : '#38bdf8'}">${data.entropy}</span>
         </div>
         <div class="block-row" style="align-items:flex-start;padding-top:6px">
-        <span class="block-row-key">Indicators</span>
+        <span class="block-row-key">Indicators
+          <span class="help">?
+            <span class="tip">Indicators are keywords found inside the file (e.g., PowerShell, download, rundll32). They can hint at behavior, but they are not proof of malware.</span>
+          </span>
+        </span>
         <div class="string-tags" style="justify-content:flex-end;max-width:65%">${strHtml}</div>
         </div>
         </div>
@@ -1027,6 +1108,26 @@
         const bar = document.getElementById("riskBar");
         if (bar) bar.style.width = Math.min(score, 100) + "%";
         }, 80);
+        }
+
+        async function runAIAnalysis() {
+        const btn = document.getElementById("aiRunBtn");
+        if (!lastFileId || !btn) return;
+        btn.disabled = true;
+        btn.textContent = "Running AI Analysis...";
+        try {
+            const res = await fetch(`${API_URL}/api/ai-analysis/${lastFileId}/`, { method:"POST" });
+            const data = await res.json();
+            const ai = (data && data.ai_comment) ? data.ai_comment : "AI analysis unavailable.";
+            // Replace the AI summary with AI output (simple)
+            const p = document.querySelector(".ai-summary");
+            if (p) p.textContent = ai;
+            btn.textContent = "AI Analysis Complete";
+        } catch (e) {
+            btn.disabled = false;
+            btn.textContent = "Run AI Analysis";
+            alert("AI analysis failed. Check server logs / API key.");
+        }
         }
 
         function toggleDetail() {

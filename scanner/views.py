@@ -16,7 +16,22 @@ import platform
 from .serializers import FileSerializer
 from openai import OpenAI
 
-client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+_openai_client = None
+
+
+def get_openai_client():
+    """
+    Lazily initialize OpenAI client.
+    This avoids crashing the app at import time when OPENAI_API_KEY is not set.
+    """
+    global _openai_client
+    if _openai_client is not None:
+        return _openai_client
+    api_key = os.getenv("OPENAI_API_KEY")
+    if not api_key:
+        return None
+    _openai_client = OpenAI(api_key=api_key)
+    return _openai_client
 
 # ── Kütüphane kontrolleri ──────────────────────────
 try:
@@ -346,6 +361,9 @@ Suspicious indicators: {truly_suspicious if truly_suspicious else 'None'}
 VirusTotal: {vt_malicious} malicious, {vt_suspicious} suspicious"""
 
     try:
+        client = get_openai_client()
+        if client is None:
+            return "AI analysis unavailable (OpenAI is not configured)."
         r = client.chat.completions.create(
             model="gpt-4o-mini",
             messages=[{"role": "user", "content": prompt}],

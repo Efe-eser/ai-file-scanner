@@ -1,0 +1,9 @@
+services:
+  web:
+    image: filexray
+    container_name: filexray
+    ports:
+      # Bind only to localhost so the app isn't reachable directly from the internet.
+      # Your reverse proxy on the same host can still reach it via 127.0.0.1:8000.
+      - "127.0.0.1:8000:8000"
+    restart: unless-stopped

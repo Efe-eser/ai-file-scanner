@@ -471,7 +471,10 @@ def calculate_final_score(rule, entropy_s, vt_s, ml_s, vm):
         f = rule * 0.25 + entropy_s * 0.15 + vt_s * 0.40 + ml_s * 0.20
     else:
         f = rule * 0.35 + entropy_s * 0.25 + vt_s * 0.40
-    return round(max(0, min(f + bonus, 100)), 2)
+    # If VirusTotal has multiple malicious detections, increase the displayed risk score.
+    # Status already becomes MALICIOUS via determine_status(vm>=3), but this aligns the score with that verdict.
+    vt_boost = 30 if vm >= 3 else 0
+    return round(max(0, min(f + bonus + vt_boost, 100)), 2)
 
 
 def determine_status(score, vm):
@@ -655,8 +658,16 @@ class FileAIAnalysisView(APIView):
 
         vt_malicious, vt_suspicious = check_virustotal(sha256)
 
-        # Use stored risk score as final score fallback
-        final_score = float(instance.risk_score or 0)
+        # Recompute final score (so AI view reflects current VT/heuristics),
+        # but keep stored score as a fallback if anything is missing.
+        try:
+            vt_score = get_vt_score(vt_malicious, vt_suspicious)
+            rule_s = get_rule_score(ext, file_size, len(strings_found or []))
+            entropy_s = get_entropy_score(entropy)
+            ml_s, _ = get_ml_score(entropy, file_size, len(strings_found or []), vt_malicious, vt_suspicious)
+            final_score = calculate_final_score(rule_s, entropy_s, vt_score, ml_s, vt_malicious)
+        except Exception:
+            final_score = float(instance.risk_score or 0)
 
         # Identify app + signature info (for clearer, confident AI summary)
         app_info = identify_application(filename, file_data, vt_malicious, vt_suspicious)

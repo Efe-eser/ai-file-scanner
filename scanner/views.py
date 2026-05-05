@@ -410,6 +410,21 @@ def _safe_text_preview(file_data: bytes, max_chars: int = 2400) -> str:
     return preview.strip()
 
 
+def _safe_base64_preview(file_data: bytes, head_len: int = 4096, tail_len: int = 4096) -> tuple[str, bool]:
+    """
+    Base64 preview for binary files. Returns (text, truncated).
+    """
+    import base64
+    if not file_data:
+        return "", False
+    truncated = len(file_data) > (head_len + tail_len)
+    if not truncated:
+        b = file_data
+    else:
+        b = file_data[:head_len] + file_data[-tail_len:]
+    return base64.b64encode(b).decode("ascii"), truncated
+
+
 def get_ai_file_review(filename: str, ext: str, file_data: bytes, vt_malicious: int, vt_suspicious: int, app_info=None):
     """
     AI review intended to be independent from our heuristic scoring.
@@ -434,29 +449,47 @@ def get_ai_file_review(filename: str, ext: str, file_data: bytes, vt_malicious: 
     if ext in [".bat", ".cmd", ".ps1", ".vbs", ".js", ".scr", ".sh", ".py"]:
         text_preview = _safe_text_preview(file_data, 2400)
 
-    prompt = f"""You are a helpful cybersecurity analyst.
-Answer as if the user just asked you: "Do you think this file is malicious? What would you do?"
-Write in Turkish. Keep it concise but genuinely helpful (4–8 short lines).
+    # "As if dragged into ChatGPT": send content to the model (within limits).
+    is_text_like = ext in [".bat", ".cmd", ".ps1", ".vbs", ".js", ".scr", ".sh", ".py", ".txt", ".md", ".json", ".yaml", ".yml", ".xml", ".ini", ".cfg"]
 
-Rules:
-- Be independent: do NOT reference any "risk score" or our scanner's verdict.
-- Do NOT over-focus on a single signal (e.g., signature). Weigh evidence holistically.
-- If evidence is limited or ambiguous, say so explicitly and give a cautious next step.
-- If this is a script file, consider whether suspicious keywords are in comments (e.g., BAT: REM / ::, PowerShell: #) and avoid false positives.
+    # Hard caps to avoid token blowups.
+    max_text_chars = 22000
 
-Context (derived from the file and hash lookups):
-File: {filename} | Type: {ext} | Size: {round(len(file_data)/1024,1)} KB
-Signature: certified={certified}, signature_valid={verified}, publisher="{publisher}", app="{app_name}"
-VirusTotal (hash lookup): {vt_malicious} malicious, {vt_suspicious} suspicious
-Indicator strings found: {indicators if indicators else 'None'}
-Header hex (first 256 bytes): {header_hex if header_hex else 'N/A'}
-Text preview (first lines, if available):
-{text_preview if text_preview else 'N/A'}
+    file_content_block = ""
+    truncated_note = ""
+
+    if is_text_like:
+        full_text = _safe_text_preview(file_data, max_text_chars)
+        truncated = full_text.endswith("\n…") or full_text.endswith("…")
+        if truncated:
+            truncated_note = "NOTE: The file content was truncated due to size limits."
+        file_content_block = f"---BEGIN FILE TEXT---\n{full_text}\n---END FILE TEXT---"
+    else:
+        b64, truncated = _safe_base64_preview(file_data, 4096, 4096)
+        if truncated:
+            truncated_note = "NOTE: The binary content was truncated (head+tail only) due to size limits."
+        file_content_block = f"---BEGIN FILE BASE64 (binary)---\n{b64}\n---END FILE BASE64---"
+
+    prompt = f"""You are a cybersecurity analyst.
+The user asks: "Is this file safe?"
+
+Analyze ONLY based on the file content provided below (like a file was dragged into chat) and your own general security knowledge.
+Do not reference any external scan engines' verdicts or our internal scoring.
+Write in Turkish, concise but helpful (6–10 short lines).
+
+{truncated_note}
+
+File name: {filename}
+File type: {ext}
+Signature (if applicable): signature_valid={verified}, publisher="{publisher}", app="{app_name}"
+VirusTotal hash lookup stats (optional context): {vt_malicious} malicious, {vt_suspicious} suspicious
+
+{file_content_block}
 
 Output format:
-- Start with: "Kısa cevap: ..."
-- Then 2–4 bullet points explaining why (what you saw in the preview / indicators / VT).
-- End with: "Öneri: ..." (one concrete next step)."""
+- "Kısa cevap: ..."
+- 3–6 short bullet points (what you see in the content, e.g., does it execute commands, download, persistence, obfuscation, suspicious strings in comments vs active code).
+- "Öneri: ..." (one concrete next step)."""
 
     try:
         client = get_openai_client()
@@ -465,7 +498,7 @@ Output format:
         r = client.chat.completions.create(
             model="gpt-4o-mini",
             messages=[{"role": "user", "content": prompt}],
-            max_tokens=200,
+            max_tokens=260,
             temperature=0.3,
         )
         return r.choices[0].message.content.strip()

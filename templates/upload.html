@@ -1363,8 +1363,13 @@
 
         // Convert **bold** to red+bold emphasis.
         const withEmphasis = escaped.replace(/\*\*(.+?)\*\*/g, `<span class="${emphasisClass}">$1</span>`);
+        // Color the conclusion label itself (SAFE/SUSPICIOUS/MALICIOUS).
+        const withColoredConclusion = withEmphasis.replace(
+          /(Conclusion:\s*)(SAFE|SUSPICIOUS|MALICIOUS)/i,
+          `$1<span class="${emphasisClass}">$2</span>`
+        );
         // Newlines -> <br> for readability.
-        return withEmphasis.replace(/\n/g, "<br>");
+        return withColoredConclusion.replace(/\n/g, "<br>");
         }
 
         async function runAIAnalysis() {

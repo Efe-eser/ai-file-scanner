@@ -458,26 +458,41 @@ def get_ai_file_review(filename: str, ext: str, file_data: bytes, vt_malicious: 
             truncated_note = "NOTE: The binary content was truncated (head+tail only) due to size limits."
         file_content_block = f"---BEGIN FILE BASE64 (binary)---\n{b64}\n---END FILE BASE64---"
 
-    prompt = f"""Is this file safe? Why or why not?
-Write in English and follow this exact format (no extra sections, no preamble, no numbered lists, no generic advice like "scan with antivirus/VirusTotal"):
+    prompt = f"""You are a malware analyst. Analyze the file content like a human expert, not a keyword scanner.
 
-Conclusion: SAFE | SUSPICIOUS | MALICIOUS
+    Your goal:
+    Decide if the file is truly harmful, potentially suspicious, or clearly safe based on actual behavior and intent.
 
-- Bullet 1 (most important evidence)
-- Bullet 2
-- Bullet 3 (optional)
-- Bullet 4 (optional)
+    Write in English and follow this exact format:
 
-Rules:
-- Choose the conclusion using your own judgment, independent of any scanner/tool verdicts.
-- Keep bullets concrete and grounded in the content (e.g., actual commands, downloads, persistence, obfuscation, whether suspicious strings are only in comments).
-- Wrap key phrases inside bullets with **double asterisks** for emphasis (the UI will color them based on the conclusion).
-- If content is truncated or insufficient, lean toward SUSPICIOUS and say what is missing.
+    Conclusion: SAFE | SUSPICIOUS | MALICIOUS
 
-{truncated_note}
+    - Bullet 1 (most important reasoning)
+    - Bullet 2
+    - Bullet 3 (optional)
+    - Bullet 4 (optional)
 
-{file_content_block}
-"""
+    Strict Rules:
+    - DO NOT classify based only on keywords like "powershell", "cmd.exe", "base64".
+    - Check whether suspicious terms are:
+    • inside comments (non-executable)
+    • part of a demo/test file
+    • actually executed commands
+    - If the file explicitly states it is a harmless demo/test AND no real harmful action is performed → classify as SAFE.
+    - MALICIOUS only if there is clear harmful behavior (execution, persistence, download & run, obfuscation used for payload).
+    - SUSPICIOUS only if intent is unclear or partially hidden.
+    - Prioritize actual behavior over appearance.
+    - Ignore generic “this could be dangerous” reasoning.
+    - Be confident when evidence shows harmless intent.
+
+    Important:
+    - Comments (REM, //, #) do NOT count as execution.
+    - Educational/test/demo scripts are SAFE unless they actually perform malicious actions.
+ 
+    {truncated_note}
+
+    {file_content_block}
+    """
 
     try:
         client = get_openai_client()

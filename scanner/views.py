@@ -346,19 +346,7 @@ def get_ai_analysis(
     app_name = app_info.get("app_name") or ""
     publisher = app_info.get("publisher") or ""
 
-    prompt = f"""You are a user-friendly cybersecurity analyst.
-Write in English. Maximum 2 short sentences.
-
-1) The first word MUST be one label: SAFE / SUSPICIOUS / MALICIOUS
-2) Then give one clear reason (no hedging).
-3) If the digital signature is valid, explicitly say it and avoid unnecessary warnings.
-4) Do NOT repeat UI numbers (risk/entropy); interpret them.
-
-File: {filename} | Type: {ext} | Size: {round(file_size/1024,1)} KB
-Signed/Verified: certified={certified}, signature_valid={verified}, publisher="{publisher}", app="{app_name}"
-Risk: {final_score}/100 | Entropy: {entropy}
-Suspicious indicators: {truly_suspicious if truly_suspicious else 'None'}
-VirusTotal: {vt_malicious} malicious, {vt_suspicious} suspicious"""
+    prompt = f"""İs this file safe ? explain it in max 3 sentences with your own opinion without the info from this project"""
 
     try:
         client = get_openai_client()

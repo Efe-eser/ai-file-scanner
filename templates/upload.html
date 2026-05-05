@@ -1126,6 +1126,7 @@
         e.preventDefault();
         const file = document.getElementById("fileInput").files[0];
         if (!file) return alert("Select a file first.");
+        lastUploadedFile = file;
 
         const fd = new FormData();
         fd.append("file", file);
@@ -1163,6 +1164,7 @@
         });
 
         let lastFileId = null;
+        let lastUploadedFile = null;
 
         const RISK_BY_EXT = {
           ".bat": "Runs commands. If “download-and-run” is used, it can <span class='risk-strong'>execute system actions</span>, <span class='risk-strong'>change registry settings</span>, and <span class='risk-strong'>create persistence</span>.",
@@ -1207,8 +1209,7 @@
         const summary = data.ai_comment || "";
 
         const aiAvailable = data.ai_available === true;
-        const fileRetained = data.file_retained === true;
-        const canRunAI = aiAvailable && lastFileId && fileRetained;
+        const canRunAI = aiAvailable && lastUploadedFile;
         const aiBtnHtml = canRunAI
           ? `<button class="reset-btn" style="margin-top:10px" id="aiRunBtn" onclick="runAIAnalysis()">Run AI Analysis</button>`
           : "";
@@ -1274,8 +1275,13 @@
         </div>
 
         <div class="info-block">
-        <div class="block-title">AI Analysis</div>
+        <div class="block-title">Scanner Summary</div>
         <p class="ai-summary">${summary}</p>
+        </div>
+
+        <div class="info-block">
+        <div class="block-title">AI Analysis (Second Opinion)</div>
+        <p class="ai-summary" id="aiSecondOpinion">Click the button to request an independent AI review of the uploaded file.</p>
         ${aiBtnHtml}
         </div>
 
@@ -1327,15 +1333,17 @@
 
         async function runAIAnalysis() {
         const btn = document.getElementById("aiRunBtn");
-        if (!lastFileId || !btn) return;
+        if (!lastUploadedFile || !btn) return;
         btn.disabled = true;
         btn.textContent = "Running AI Analysis...";
         try {
-            const res = await fetch(`${API_URL}/api/ai-analysis/${lastFileId}/`, { method:"POST" });
+            const fd = new FormData();
+            fd.append("file", lastUploadedFile);
+            const res = await fetch(`${API_URL}/api/ai-upload/`, { method:"POST", body: fd });
             const data = await res.json();
             const ai = (data && data.ai_comment) ? data.ai_comment : "AI analysis unavailable.";
-            // Replace the AI summary with AI output (simple)
-            const p = document.querySelector(".ai-summary");
+            // Put AI output into the second-opinion panel
+            const p = document.getElementById("aiSecondOpinion");
             if (p) p.textContent = ai;
             btn.textContent = "AI Analysis Complete";
         } catch (e) {
@@ -1352,6 +1360,7 @@
         document.getElementById("result").style.display     = "none";
         document.getElementById("progFill").style.width     = "0%";
         document.getElementById("uploadForm").style.display = "flex";
+        lastUploadedFile = null;
         }
 
         // Modal behavior

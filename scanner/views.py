@@ -375,6 +375,65 @@ VirusTotal: {vt_malicious} malicious, {vt_suspicious} suspicious"""
         return "AI analysis unavailable."
 
 
+def _hex_preview(data: bytes, max_len: int = 256) -> str:
+    """
+    Short hex preview for AI context (not a full file upload).
+    """
+    if not data:
+        return ""
+    b = data[:max_len]
+    return b.hex()
+
+
+def get_ai_file_review(filename: str, ext: str, file_data: bytes, vt_malicious: int, vt_suspicious: int, app_info=None):
+    """
+    AI review intended to be independent from our heuristic scoring.
+    We provide minimal file-derived evidence (small hex header + indicator strings + signature info).
+    """
+    app_info = app_info or {}
+    certified = bool(app_info.get("certified"))
+    verified = bool(app_info.get("verified"))
+    publisher = app_info.get("publisher") or ""
+    app_name = app_info.get("app_name") or ""
+
+    strings_found = suspicious_strings(file_data) or []
+    indicators = [s for s in strings_found if s in {
+        "cmd.exe", "powershell", "wget", "curl", "base64",
+        "eval", "invoke-expression", "downloadstring", "createobject", "wscript",
+        "regsvr32", "mshta", "rundll32",
+    }]
+
+    header_hex = _hex_preview(file_data, 256)
+
+    prompt = f"""You are a cybersecurity analyst giving a second opinion.
+Write in English. Maximum 2 short sentences.
+
+1) The first word MUST be one label: SAFE / SUSPICIOUS / MALICIOUS
+2) Then give one clear reason (no hedging).
+3) If the digital signature is valid, explicitly say it.
+4) Do NOT reference any "risk score" or our scanner's verdict; you are independent.
+
+File: {filename} | Type: {ext} | Size: {round(len(file_data)/1024,1)} KB
+Signature: certified={certified}, signature_valid={verified}, publisher="{publisher}", app="{app_name}"
+VirusTotal (hash lookup): {vt_malicious} malicious, {vt_suspicious} suspicious
+Indicator strings found: {indicators if indicators else 'None'}
+Header hex (first 256 bytes): {header_hex if header_hex else 'N/A'}"""
+
+    try:
+        client = get_openai_client()
+        if client is None:
+            return "AI analysis unavailable (OpenAI is not configured)."
+        r = client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[{"role": "user", "content": prompt}],
+            max_tokens=140,
+            temperature=0.3,
+        )
+        return r.choices[0].message.content.strip()
+    except Exception:
+        return "AI analysis unavailable."
+
+
 # ----------------------------
 # SCORE HELPERS
 # ----------------------------
@@ -730,6 +789,54 @@ class FileAIAnalysisView(APIView):
 
         return Response({
             "file_id": file_id,
+            "ai_comment": ai_text,
+            "ai_generated": True,
+        }, status=status.HTTP_200_OK)
+
+
+class FileAIUploadView(APIView):
+    """
+    Privacy-friendly AI analysis: user re-uploads the file for AI only.
+    The file is processed in-memory and is NOT stored on disk.
+    """
+    def post(self, request):
+        if not os.getenv("OPENAI_API_KEY"):
+            return Response({"detail": "OpenAI is not configured."}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
+
+        up = request.FILES.get("file")
+        if not up:
+            return Response({"detail": "No file provided."}, status=status.HTTP_400_BAD_REQUEST)
+
+        filename = up.name or "uploaded"
+        ext = os.path.splitext(filename)[1].lower()
+
+        try:
+            file_data = up.read()
+        except Exception:
+            return Response({"detail": "Unable to read file."}, status=status.HTTP_400_BAD_REQUEST)
+
+        file_size = len(file_data)
+
+        # Derive the same analysis inputs used by the main scan.
+        sha256 = hashlib.sha256(file_data).hexdigest()
+        entropy = calculate_entropy(file_data)
+        strings_found = suspicious_strings(file_data)
+        vt_malicious, vt_suspicious = check_virustotal(sha256)
+
+        # Identify app + signature info for clearer AI summary
+        app_info = identify_application(filename, file_data, vt_malicious, vt_suspicious)
+
+        # Independent AI review (does not use our heuristic score/entropy in the prompt)
+        ai_text = get_ai_file_review(
+            os.path.basename(filename),
+            ext,
+            file_data,
+            vt_malicious,
+            vt_suspicious,
+            app_info=app_info,
+        )
+
+        return Response({
             "ai_comment": ai_text,
             "ai_generated": True,
         }, status=status.HTTP_200_OK)

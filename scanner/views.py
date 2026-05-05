@@ -458,6 +458,35 @@ def get_ai_file_review(filename: str, ext: str, file_data: bytes, vt_malicious: 
             truncated_note = "NOTE: The binary content was truncated (head+tail only) due to size limits."
         file_content_block = f"---BEGIN FILE BASE64 (binary)---\n{b64}\n---END FILE BASE64---"
 
+    # Only help the AI avoid false positives for VERIFIED signed popular software.
+    # This block is not included for unverified/EICAR-like samples.
+    trusted_publishers = {
+        "Google LLC",
+        "Google Inc.",
+        "Microsoft Corporation",
+        "Apple Inc.",
+        "Mozilla Corporation",
+        "Adobe Inc.",
+        "NVIDIA Corporation",
+        "Intel Corporation",
+    }
+    trusted_context = ""
+    if verified and publisher:
+        is_trusted = any(tp.lower() in publisher.lower() for tp in trusted_publishers)
+        if is_trusted and vt_malicious == 0 and vt_suspicious == 0:
+            trusted_context = f"""
+
+    Trusted publisher context (signature verified):
+    - Application: {app_name or "Unknown"}
+    - Publisher: {publisher}
+    - Signature Verified: Yes
+    - VirusTotal (hash lookup): {vt_malicious} malicious, {vt_suspicious} suspicious
+
+    Additional guidance:
+    - If the signature is verified for a trusted publisher and you do not see malicious behavior in the provided content, classify as SAFE.
+    - Do NOT mark common legitimate software as suspicious just because it is a binary or looks encoded.
+    """
+
     prompt = f"""You are a malware analyst. Analyze the file content like a human expert, not a keyword scanner.
 
     Your goal:
@@ -492,6 +521,7 @@ def get_ai_file_review(filename: str, ext: str, file_data: bytes, vt_malicious: 
     {truncated_note}
 
     {file_content_block}
+    {trusted_context}
     """
 
     try:

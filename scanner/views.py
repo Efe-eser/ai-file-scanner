@@ -507,7 +507,12 @@ def get_ai_file_review(filename: str, ext: str, file_data: bytes, vt_malicious: 
     - In this case, DO NOT use arguments like "unknown binary", "encoded data", or "unclear purpose" to justify SUSPICIOUS.
     """
 
-    prompt = f"""You are a malware analyst. Analyze the file content like a human expert, not a keyword scanner.
+    # If trusted_context is present, put it at the TOP so the model doesn't miss it.
+    trusted_prefix = trusted_context.strip()
+    if trusted_prefix:
+        trusted_prefix = trusted_prefix + "\n\n"
+
+    prompt = f"""{trusted_prefix}You are a malware analyst. Analyze the file content like a human expert, not a keyword scanner.
 
     Your goal:
     Decide if the file is truly harmful, potentially suspicious, or clearly safe based on actual behavior and intent.
@@ -523,6 +528,7 @@ def get_ai_file_review(filename: str, ext: str, file_data: bytes, vt_malicious: 
 
     Strict Rules:
     - DO NOT classify based only on keywords like "powershell", "cmd.exe", "base64".
+    - IMPORTANT: If the file content is shown as base64 here, that is only a transport/representation format and NOT evidence of obfuscation.
     - Check whether suspicious terms are:
     • inside comments (non-executable)
     • part of a demo/test file
@@ -541,7 +547,6 @@ def get_ai_file_review(filename: str, ext: str, file_data: bytes, vt_malicious: 
     {truncated_note}
 
     {file_content_block}
-    {trusted_context}
     """
 
     try:

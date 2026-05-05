@@ -843,6 +843,127 @@
             border-radius: 20px;
             background: rgba(56,189,248,.04)
         }
+
+        /* modal */
+        .modal-backdrop {
+            position: fixed;
+            inset: 0;
+            background: rgba(0,0,0,.62);
+            backdrop-filter: blur(6px);
+            display: none;
+            align-items: center;
+            justify-content: center;
+            z-index: 999;
+            padding: 24px;
+        }
+
+        .modal {
+            width: 100%;
+            max-width: 720px;
+            border-radius: 18px;
+            border: 1px solid rgba(56,189,248,.18);
+            background: rgba(15,25,35,.98);
+            box-shadow: 0 40px 120px rgba(0,0,0,.65);
+            overflow: hidden;
+        }
+
+        .modal-head {
+            padding: 16px 16px 12px;
+            border-bottom: 1px solid rgba(255,255,255,.06);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+        }
+
+        .modal-title {
+            font-family: 'JetBrains Mono',monospace;
+            font-size: .72rem;
+            letter-spacing: .14em;
+            text-transform: uppercase;
+            color: #cbd5e1;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .modal-close {
+            border: 1px solid rgba(56,189,248,.18);
+            background: rgba(56,189,248,.04);
+            color: var(--accent);
+            border-radius: 10px;
+            cursor: pointer;
+            padding: 8px 10px;
+            font-family: 'JetBrains Mono',monospace;
+            font-size: .68rem;
+            letter-spacing: .06em;
+        }
+
+        .modal-close:hover { opacity: .85; }
+
+        .modal-body {
+            padding: 14px 16px 16px;
+            display: grid;
+            gap: 10px;
+        }
+
+        .risk-grid {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 10px;
+        }
+
+        @media (min-width: 760px) {
+            .risk-grid { grid-template-columns: 1fr 1fr; }
+        }
+
+        .risk-item {
+            border: 1px solid rgba(255,255,255,.06);
+            background: rgba(255,255,255,.025);
+            border-radius: 14px;
+            padding: 12px 12px;
+        }
+
+        .risk-ext {
+            font-family: 'JetBrains Mono',monospace;
+            font-size: .66rem;
+            letter-spacing: .1em;
+            color: var(--accent);
+            margin-bottom: 6px;
+        }
+
+        .risk-text {
+            font-family: 'JetBrains Mono',monospace;
+            font-size: .72rem;
+            line-height: 1.6;
+            color: #cbd5e1;
+        }
+
+        .risk-strong {
+            font-weight: 800;
+            color: var(--danger);
+        }
+
+        .ghost-btn {
+            width: 100%;
+            padding: 11px;
+            border-radius: 10px;
+            border: 1px solid rgba(56,189,248,.18);
+            background: transparent;
+            color: var(--accent);
+            font-family: 'Syne',sans-serif;
+            font-size: .82rem;
+            font-weight: 700;
+            cursor: pointer;
+            letter-spacing: .06em;
+            text-transform: uppercase;
+            transition: background .2s,border-color .2s,opacity .2s;
+        }
+
+        .ghost-btn:hover {
+            background: rgba(56,189,248,.06);
+            border-color: rgba(56,189,248,.38);
+        }
     </style>
 </head>
 <body>
@@ -895,6 +1016,9 @@
                 </label>
 
                 <button class="btn" type="submit">Scan File</button>
+
+                <button class="ghost-btn" type="button" id="whatBtn">What could happen?</button>
+                <button class="ghost-btn" type="button" id="whereBtn">Where do my files go?</button>
             </form>
 
             <div id="scanningBlock">
@@ -919,6 +1043,74 @@
         </div>
         <div class="ai-badge">AI · POWERED</div>
     </main>
+
+    <div class="modal-backdrop" id="riskModal" aria-hidden="true">
+        <div class="modal" role="dialog" aria-modal="true" aria-labelledby="riskTitle">
+            <div class="modal-head">
+                <div class="modal-title" id="riskTitle">
+                    What could happen?
+                </div>
+                <button class="modal-close" type="button" id="riskClose">Close</button>
+            </div>
+            <div class="modal-body">
+                <div class="risk-grid">
+                    <div class="risk-item">
+                        <div class="risk-ext">.bat / .cmd</div>
+                        <div class="risk-text">Runs commands. If “download-and-run” is used, it can <span class="risk-strong">execute system actions</span>, <span class="risk-strong">change registry settings</span>, and <span class="risk-strong">create persistence</span>.</div>
+                    </div>
+                    <div class="risk-item">
+                        <div class="risk-ext">.ps1</div>
+                        <div class="risk-text">PowerShell scripts can <span class="risk-strong">download and execute payloads</span>, <span class="risk-strong">steal credentials</span>, and <span class="risk-strong">bypass system policies</span> when misused.</div>
+                    </div>
+                    <div class="risk-item">
+                        <div class="risk-ext">.vbs / .js / .scr</div>
+                        <div class="risk-text">Scripts may run via Windows Script Host. <span class="risk-strong">Social engineering</span> (“double‑click”) is a common way these get executed.</div>
+                    </div>
+                    <div class="risk-item">
+                        <div class="risk-ext">.exe / .dll / .msi</div>
+                        <div class="risk-text">Directly executable binaries can carry <span class="risk-strong">trojans/ransomware</span>, <span class="risk-strong">abuse DLL sideloading</span>, and <span class="risk-strong">spoof or misuse digital signatures</span>.</div>
+                    </div>
+                    <div class="risk-item">
+                        <div class="risk-ext">.docm / .xlsm</div>
+                        <div class="risk-text">Macro-enabled Office files can <span class="risk-strong">run code</span> when “Enable Content” is clicked, which is a frequent infection vector.</div>
+                    </div>
+                    <div class="risk-item">
+                        <div class="risk-ext">.zip / .rar / .7z</div>
+                        <div class="risk-text">Archives can <span class="risk-strong">hide executables</span>, trigger <span class="risk-strong">decompression bombs</span>, or exploit <span class="risk-strong">unsafe extraction paths</span> (e.g., zip‑slip).</div>
+                    </div>
+                    <div class="risk-item">
+                        <div class="risk-ext">.jpeg / .png</div>
+                        <div class="risk-text">Images are not normally executable, but malformed files can exploit <span class="risk-strong">viewer/parser bugs</span> or <span class="risk-strong">hide payloads</span> (steganography). Risk is usually lower than executables.</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal-backdrop" id="privacyModal" aria-hidden="true">
+        <div class="modal" role="dialog" aria-modal="true" aria-labelledby="privacyTitle">
+            <div class="modal-head">
+                <div class="modal-title" id="privacyTitle">
+                    Where do my files go?
+                </div>
+                <button class="modal-close" type="button" id="privacyClose">Close</button>
+            </div>
+            <div class="modal-body">
+                <div class="risk-item">
+                    <div class="risk-ext">Temporary processing</div>
+                    <div class="risk-text">Your file is uploaded to our server (e.g., an EC2 instance) only to generate this scan report. After the report is produced, the uploaded file is deleted from server storage.</div>
+                </div>
+                <div class="risk-item">
+                    <div class="risk-ext">What we send to third parties</div>
+                    <div class="risk-text">VirusTotal is queried using the file’s SHA‑256 hash (not the raw file). AI analysis (if enabled) uses scan metadata (type/size/entropy/indicators/signature/VT stats) rather than uploading your file contents.</div>
+                </div>
+                <div class="risk-item">
+                    <div class="risk-ext">Important</div>
+                    <div class="risk-text">This is a security demo and does not guarantee a file is safe. Avoid running unknown files, and never enable macros from untrusted sources.</div>
+                </div>
+            </div>
+        </div>
+    </div>
 
     <script>
         const API_URL = window.location.origin;
@@ -972,11 +1164,37 @@
 
         let lastFileId = null;
 
+        const RISK_BY_EXT = {
+          ".bat": "Runs commands. If “download-and-run” is used, it can execute system actions, change registry settings, and create persistence.",
+          ".cmd": "Runs commands. If “download-and-run” is used, it can execute system actions, change registry settings, and create persistence.",
+          ".ps1": "PowerShell scripts can download and execute payloads, steal credentials, and bypass system policies when misused.",
+          ".vbs": "Scripts may run via Windows Script Host. Social engineering (“double‑click”) is a common way these get executed.",
+          ".js":  "Scripts may run via Windows Script Host. Social engineering (“double‑click”) is a common way these get executed.",
+          ".scr": "Scripts may run via Windows Script Host. Social engineering (“double‑click”) is a common way these get executed.",
+          ".exe": "Directly executable binaries can carry trojans/ransomware, abuse DLL sideloading, and spoof or misuse digital signatures.",
+          ".dll": "Directly executable binaries can carry trojans/ransomware, abuse DLL sideloading, and spoof or misuse digital signatures.",
+          ".msi": "Directly executable installers can carry trojans/ransomware and execute system changes during installation.",
+          ".docm":"Macro-enabled Office files can run code when “Enable Content” is clicked, which is a frequent infection vector.",
+          ".xlsm":"Macro-enabled Office files can run code when “Enable Content” is clicked, which is a frequent infection vector.",
+          ".zip": "Archives can hide executables, trigger decompression bombs, or exploit unsafe extraction paths (e.g., zip‑slip).",
+          ".rar": "Archives can hide executables, trigger decompression bombs, or exploit unsafe extraction paths (e.g., zip‑slip).",
+          ".7z":  "Archives can hide executables, trigger decompression bombs, or exploit unsafe extraction paths (e.g., zip‑slip).",
+          ".jpeg":"Images are not normally executable, but malformed files can exploit viewer/parser bugs or hide payloads (steganography). Risk is usually lower than executables.",
+          ".jpg": "Images are not normally executable, but malformed files can exploit viewer/parser bugs or hide payloads (steganography). Risk is usually lower than executables.",
+          ".png": "Images are not normally executable, but malformed files can exploit viewer/parser bugs or hide payloads (steganography). Risk is usually lower than executables.",
+        };
+
+        function getExtRiskText(ext) {
+          const key = (ext || "").toLowerCase();
+          return RISK_BY_EXT[key] || "File types differ in how they can be abused. Be extra cautious with anything that can execute code (scripts, installers, macros), and avoid running untrusted files.";
+        }
+
         function showResult(data) {
         document.getElementById("scanningBlock").style.display = "none";
 
         const isCert = data.certified === true;
         const score  = data.risk_score || 0;
+        const ext = (data.file_type || "").toLowerCase();
         lastFileId = data.file_id || null;
 
         let cls = "safe";
@@ -993,9 +1211,13 @@
         const detail  = cutIdx > -1 ? full.slice(cutIdx + 1).trim() : "";
 
         const aiAvailable = data.ai_available === true;
-        const canRunAI = aiAvailable && lastFileId;
+        const fileRetained = data.file_retained === true;
+        const canRunAI = aiAvailable && lastFileId && fileRetained;
         const aiBtnHtml = canRunAI
           ? `<button class="reset-btn" style="margin-top:10px" id="aiRunBtn" onclick="runAIAnalysis()">Run AI Analysis</button>`
+          : "";
+        const aiNote = (!fileRetained)
+          ? `<div class="ai-detail" style="display:block">Uploaded file was deleted after the scan report. Re-upload is required for AI analysis.</div>`
           : "";
 
         // strings
@@ -1061,6 +1283,7 @@
         <div class="info-block">
         <div class="block-title">AI Analysis</div>
         <p class="ai-summary">${summary}</p>
+        ${aiNote}
         ${detail ? `
         <div class="ai-detail" id="aiDetail">${detail}</div>
         <button class="expand-btn" id="expandBtn" onclick="toggleDetail()">
@@ -1099,6 +1322,11 @@
         </span>
         <div class="string-tags" style="justify-content:flex-end;max-width:65%">${strHtml}</div>
         </div>
+        </div>
+
+        <div class="info-block">
+        <div class="block-title">Potential risks for this file type</div>
+        <p class="ai-summary">${getExtRiskText(ext)}</p>
         </div>
 
         <button class="reset-btn" onclick="resetScanner()">← Scan Another File</button>
@@ -1148,6 +1376,48 @@
         document.getElementById("progFill").style.width     = "0%";
         document.getElementById("uploadForm").style.display = "flex";
         }
+
+        // Modal behavior
+        const modal = document.getElementById("riskModal");
+        const whatBtn = document.getElementById("whatBtn");
+        const closeBtn = document.getElementById("riskClose");
+
+        const privacyModal = document.getElementById("privacyModal");
+        const whereBtn = document.getElementById("whereBtn");
+        const privacyClose = document.getElementById("privacyClose");
+
+        function openRiskModal() {
+          modal.style.display = "flex";
+          modal.setAttribute("aria-hidden", "false");
+        }
+        function closeRiskModal() {
+          modal.style.display = "none";
+          modal.setAttribute("aria-hidden", "true");
+        }
+
+        function openPrivacyModal() {
+          privacyModal.style.display = "flex";
+          privacyModal.setAttribute("aria-hidden", "false");
+        }
+        function closePrivacyModal() {
+          privacyModal.style.display = "none";
+          privacyModal.setAttribute("aria-hidden", "true");
+        }
+
+        whatBtn.addEventListener("click", openRiskModal);
+        closeBtn.addEventListener("click", closeRiskModal);
+        modal.addEventListener("click", (e) => {
+          if (e.target === modal) closeRiskModal();
+        });
+        document.addEventListener("keydown", (e) => {
+          if (e.key === "Escape") { closeRiskModal(); closePrivacyModal(); }
+        });
+
+        whereBtn.addEventListener("click", openPrivacyModal);
+        privacyClose.addEventListener("click", closePrivacyModal);
+        privacyModal.addEventListener("click", (e) => {
+          if (e.target === privacyModal) closePrivacyModal();
+        });
     </script>
 </body>
 </html>

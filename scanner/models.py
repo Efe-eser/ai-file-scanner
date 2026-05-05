@@ -1,7 +1,7 @@
 from django.db import models
 
 class UploadedFile(models.Model):
-    file = models.FileField(upload_to='uploads/')
+    file = models.FileField(upload_to='uploads/', null=True, blank=True)
     uploaded_at = models.DateTimeField(auto_now_add=True)
     sha256 = models.CharField(max_length=64, blank=True)
     file_size = models.IntegerField(null=True, blank=True)
@@ -13,4 +13,4 @@ class UploadedFile(models.Model):
     ai_generated = models.BooleanField(default=False)
 
     def __str__(self):
-        return self.file.name
+        return self.file.name if self.file else f"UploadedFile#{self.id}"

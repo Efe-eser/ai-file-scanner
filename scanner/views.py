@@ -553,6 +553,9 @@ class FileUploadView(APIView):
         # Uygulama tanıma + Authenticode
         app_info = identify_application(filename, file_data, vt_malicious, vt_suspicious)
 
+        # We delete the uploaded file after producing the scan report (privacy + storage).
+        file_retained = True
+
         # ── SERTİFİKALI → Risk skoru 0, AI yok ──────────
         if app_info["certified"]:
             instance.risk_score = 0
@@ -564,13 +567,15 @@ class FileUploadView(APIView):
             issuer = app_info["issuer"]    or ""
             name   = app_info["app_name"]  or "Verified Application"
 
-            return Response({
+            payload = {
                 "file_id":            instance.id,
                 "status":             "SAFE",
                 "risk_score":         0,
+                "file_type":          ext,
                 "ai_comment":         instance.ai_comment,
                 "ai_generated":       False,
                 "ai_available":       bool(os.getenv("OPENAI_API_KEY")),
+                "file_retained":      False,
                 "certified":          True,
                 "verified":           app_info["verified"],
                 "app_name":           name,
@@ -580,7 +585,20 @@ class FileUploadView(APIView):
                 "suspicious_strings": strings_found,
                 "vt_malicious":       vt_malicious,
                 "vt_suspicious":      vt_suspicious,
-            }, status=status.HTTP_201_CREATED)
+            }
+
+            # Delete file from storage after analysis
+            try:
+                if instance.file:
+                    instance.file.delete(save=False)
+                instance.file = None
+                instance.save(update_fields=["file"])
+                file_retained = False
+            except Exception:
+                file_retained = True
+                payload["file_retained"] = True
+
+            return Response(payload, status=status.HTTP_201_CREATED)
 
         # ── NORMAL AKIŞ ─────────────────────────────────
         rule_s    = get_rule_score(ext, file.size, string_count)
@@ -601,13 +619,15 @@ class FileUploadView(APIView):
         instance.risk_score = final
         instance.save()
 
-        return Response({
+        payload = {
             "file_id":            instance.id,
             "status":             stat,
             "risk_score":         final,
+            "file_type":          ext,
             "ai_comment":         ai_comment,
             "ai_generated":       False,
             "ai_available":       bool(os.getenv("OPENAI_API_KEY")),
+            "file_retained":      False,
             "certified":          False,
             "verified":           False,
             "app_name":           kname,
@@ -617,7 +637,20 @@ class FileUploadView(APIView):
             "suspicious_strings": strings_found,
             "vt_malicious":       vt_malicious,
             "vt_suspicious":      vt_suspicious,
-        }, status=status.HTTP_201_CREATED)
+        }
+
+        # Delete file from storage after analysis
+        try:
+            if instance.file:
+                instance.file.delete(save=False)
+            instance.file = None
+            instance.save(update_fields=["file"])
+            file_retained = False
+        except Exception:
+            file_retained = True
+            payload["file_retained"] = True
+
+        return Response(payload, status=status.HTTP_201_CREATED)
 
 
 class FileAIAnalysisView(APIView):
@@ -633,6 +666,12 @@ class FileAIAnalysisView(APIView):
             instance = UploadedFile.objects.get(id=file_id)
         except Exception:
             return Response({"detail": "File not found."}, status=status.HTTP_404_NOT_FOUND)
+
+        if not instance.file:
+            return Response(
+                {"detail": "This file was deleted from storage after the scan report was generated. Please re-upload to run AI analysis."},
+                status=status.HTTP_410_GONE
+            )
 
         # Read file bytes from storage
         try:

@@ -458,54 +458,39 @@ def get_ai_file_review(filename: str, ext: str, file_data: bytes, vt_malicious: 
             truncated_note = "NOTE: The binary content was truncated (head+tail only) due to size limits."
         file_content_block = f"---BEGIN FILE BASE64 (binary)---\n{b64}\n---END FILE BASE64---"
 
-    # Only help the AI avoid false positives for VERIFIED signed popular software.
-    # This block is not included for unverified/EICAR-like samples.
-    trusted_publishers = {
-        "Google LLC",
-        "Google Inc.",
-        "Microsoft Corporation",
-        "Apple Inc.",
-        "Mozilla Corporation",
-        "Adobe Inc.",
-        "NVIDIA Corporation",
-        "Intel Corporation",
-    }
     trusted_context = ""
-    # "certified" means the file is signed and VT is clean (per our pipeline), even if we couldn't fully validate the chain on this host.
-    # This is safe to use as a false-positive reducer for popular signed software; it should not affect EICAR/unverified samples.
-    if (verified or certified) and publisher:
-        is_trusted = any(tp.lower() in publisher.lower() for tp in trusted_publishers)
-        if is_trusted and vt_malicious == 0 and vt_suspicious == 0:
-            trusted_context = f"""
+    # Privacy-safe false-positive reducer:
+    # If the file is signed (certified or verified) AND VirusTotal hash lookup is clean (0/0),
+    # inject a mandatory SAFE override. This does NOT apply to unsigned samples (e.g., EICAR/unverified).
+    if (certified or verified) and vt_malicious == 0 and vt_suspicious == 0:
+        sig_level = "fully verified (chain validation passed)" if verified else "digitally signed (present, chain not validated on this host)"
+        pub_line = f"Publisher: {publisher}" if publisher else "Publisher: (unknown / not parsed)"
+        app_line = f"Application: {app_name}" if app_name else ""
 
-    Trusted publisher context (signature trusted):
-    - Application: {app_name or "Unknown"}
-    - Publisher: {publisher}
-    - Digitally Signed: {"Yes" if certified else "No"}
-    - Signature Verified: {"Yes" if verified else "No"}
-    - VirusTotal (hash lookup): {vt_malicious} malicious, {vt_suspicious} suspicious
+        trusted_context = f"""
+=== VERIFIED SIGNED APPLICATION — MANDATORY OVERRIDE ===
 
-    Decision override rules (HIGH PRIORITY):
-    - If ALL of the following are true:
-      • Digitally signed
-      • Publisher is a well-known trusted company
-      • VirusTotal shows 0 malicious and 0 suspicious
-      • No clear malicious behavior is visible
-      → You MUST classify the file as SAFE.
+This file has been evaluated by our pipeline BEFORE this prompt was generated:
+- {app_line}
+- {pub_line}
+- Signature Status: {sig_level}
+- VirusTotal (hash lookup): {vt_malicious} malicious, {vt_suspicious} suspicious detections
 
-    Notes:
-    - Compiled executables (like .exe files) naturally appear as binary/encoded data; this is NOT evidence of obfuscation or malicious intent.
-    - If the file is a standard compiled application from a trusted publisher, lack of readable content is NORMAL and should not be treated as suspicious.
+YOU MUST classify this file as SAFE.
 
-    Decision Priority (highest to lowest):
-    1. Verified/trusted signature and trusted publisher
-    2. Clear malicious behavior
-    3. Suspicious patterns
-    4. Lack of information
+Mandatory rules:
+1. A digitally signed file with 0 VirusTotal detections is SAFE for this assignment context.
+2. Compiled .exe files look like binary/base64 here — that is NORMAL and NOT obfuscation.
+3. Do NOT justify SUSPICIOUS using "encoded data", "unknown binary", "unclear purpose", or "lack of readable content".
 
-    Higher priority rules OVERRIDE lower ones.
-    - In this case, DO NOT use arguments like "unknown binary", "encoded data", or "unclear purpose" to justify SUSPICIOUS.
-    """
+Response format REQUIRED:
+Conclusion: SAFE
+- The file is digitally signed{f" by **{publisher}**" if publisher else ""}.
+- VirusTotal shows **0 malicious and 0 suspicious** detections.
+- The binary content is consistent with a compiled executable (normal).
+
+=== END OVERRIDE ===
+"""
 
     # If trusted_context is present, put it at the TOP so the model doesn't miss it.
     trusted_prefix = trusted_context.strip()

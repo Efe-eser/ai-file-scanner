@@ -485,9 +485,26 @@ def get_ai_file_review(filename: str, ext: str, file_data: bytes, vt_malicious: 
     - Signature Verified: {"Yes" if verified else "No"}
     - VirusTotal (hash lookup): {vt_malicious} malicious, {vt_suspicious} suspicious
 
-    Additional guidance:
-    - If the file is signed by a well-known trusted publisher and no malicious behavior is visible in the provided content, classify as SAFE.
-    - Do NOT mark common legitimate software as suspicious just because it is a binary or because the content is represented as base64 here.
+    Decision override rules (HIGH PRIORITY):
+    - If ALL of the following are true:
+      • Digitally signed
+      • Publisher is a well-known trusted company
+      • VirusTotal shows 0 malicious and 0 suspicious
+      • No clear malicious behavior is visible
+      → You MUST classify the file as SAFE.
+
+    Notes:
+    - Compiled executables (like .exe files) naturally appear as binary/encoded data; this is NOT evidence of obfuscation or malicious intent.
+    - If the file is a standard compiled application from a trusted publisher, lack of readable content is NORMAL and should not be treated as suspicious.
+
+    Decision Priority (highest to lowest):
+    1. Verified/trusted signature and trusted publisher
+    2. Clear malicious behavior
+    3. Suspicious patterns
+    4. Lack of information
+
+    Higher priority rules OVERRIDE lower ones.
+    - In this case, DO NOT use arguments like "unknown binary", "encoded data", or "unclear purpose" to justify SUSPICIOUS.
     """
 
     prompt = f"""You are a malware analyst. Analyze the file content like a human expert, not a keyword scanner.

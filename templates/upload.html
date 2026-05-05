@@ -1331,6 +1331,22 @@
         }, 80);
         }
 
+        function renderAISecondOpinion(text) {
+        const raw = (text || "").toString();
+        // Escape HTML to avoid injection, then re-enable our simple formatting.
+        const escaped = raw
+          .replace(/&/g, "&amp;")
+          .replace(/</g, "&lt;")
+          .replace(/>/g, "&gt;")
+          .replace(/"/g, "&quot;")
+          .replace(/'/g, "&#039;");
+
+        // Convert **bold** to red+bold emphasis.
+        const withEmphasis = escaped.replace(/\*\*(.+?)\*\*/g, "<span class=\"risk-strong\">$1</span>");
+        // Newlines -> <br> for readability.
+        return withEmphasis.replace(/\n/g, "<br>");
+        }
+
         async function runAIAnalysis() {
         const btn = document.getElementById("aiRunBtn");
         if (!lastUploadedFile || !btn) return;
@@ -1344,7 +1360,7 @@
             const ai = (data && data.ai_comment) ? data.ai_comment : "AI analysis unavailable.";
             // Put AI output into the second-opinion panel
             const p = document.getElementById("aiSecondOpinion");
-            if (p) p.textContent = ai;
+            if (p) p.innerHTML = renderAISecondOpinion(ai);
             btn.textContent = "AI Analysis Complete";
         } catch (e) {
             btn.disabled = false;

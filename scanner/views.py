@@ -385,6 +385,31 @@ def _hex_preview(data: bytes, max_len: int = 256) -> str:
     return b.hex()
 
 
+def _safe_text_preview(file_data: bytes, max_chars: int = 2400) -> str:
+    """
+    Best-effort text preview for scripts/doc-like plain text.
+    Avoids throwing on binary; truncates aggressively.
+    """
+    if not file_data:
+        return ""
+    # Try UTF-8 first, fall back to latin-1 to preserve bytes.
+    try:
+        text = file_data.decode("utf-8", errors="replace")
+    except Exception:
+        try:
+            text = file_data.decode("latin-1", errors="replace")
+        except Exception:
+            return ""
+    text = text.replace("\x00", "")
+    # Keep it short; strip excessive whitespace while preserving lines.
+    lines = text.splitlines()
+    preview_lines = lines[:200]
+    preview = "\n".join(preview_lines)
+    if len(preview) > max_chars:
+        preview = preview[:max_chars] + "\n…"
+    return preview.strip()
+
+
 def get_ai_file_review(filename: str, ext: str, file_data: bytes, vt_malicious: int, vt_suspicious: int, app_info=None):
     """
     AI review intended to be independent from our heuristic scoring.
@@ -404,15 +429,20 @@ def get_ai_file_review(filename: str, ext: str, file_data: bytes, vt_malicious: 
     }]
 
     header_hex = _hex_preview(file_data, 256)
+    # For script-like files, include a short text preview so the AI can reason about comments/intent.
+    text_preview = ""
+    if ext in [".bat", ".cmd", ".ps1", ".vbs", ".js", ".scr", ".sh", ".py"]:
+        text_preview = _safe_text_preview(file_data, 2400)
 
     prompt = f"""You are a helpful cybersecurity analyst.
 Answer as if the user just asked you: "Do you think this file is malicious? What would you do?"
-Write in English. Keep it concise but genuinely helpful (2–4 sentences).
+Write in Turkish. Keep it concise but genuinely helpful (4–8 short lines).
 
 Rules:
 - Be independent: do NOT reference any "risk score" or our scanner's verdict.
 - Do NOT over-focus on a single signal (e.g., signature). Weigh evidence holistically.
 - If evidence is limited or ambiguous, say so explicitly and give a cautious next step.
+- If this is a script file, consider whether suspicious keywords are in comments (e.g., BAT: REM / ::, PowerShell: #) and avoid false positives.
 
 Context (derived from the file and hash lookups):
 File: {filename} | Type: {ext} | Size: {round(len(file_data)/1024,1)} KB
@@ -420,8 +450,13 @@ Signature: certified={certified}, signature_valid={verified}, publisher="{publis
 VirusTotal (hash lookup): {vt_malicious} malicious, {vt_suspicious} suspicious
 Indicator strings found: {indicators if indicators else 'None'}
 Header hex (first 256 bytes): {header_hex if header_hex else 'N/A'}
+Text preview (first lines, if available):
+{text_preview if text_preview else 'N/A'}
 
-Now give your best second-opinion assessment and one concrete next step (e.g., verify publisher, sandbox/VM, don't run)."""
+Output format:
+- Start with: "Kısa cevap: ..."
+- Then 2–4 bullet points explaining why (what you saw in the preview / indicators / VT).
+- End with: "Öneri: ..." (one concrete next step)."""
 
     try:
         client = get_openai_client()

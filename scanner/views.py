@@ -470,26 +470,12 @@ def get_ai_file_review(filename: str, ext: str, file_data: bytes, vt_malicious: 
             truncated_note = "NOTE: The binary content was truncated (head+tail only) due to size limits."
         file_content_block = f"---BEGIN FILE BASE64 (binary)---\n{b64}\n---END FILE BASE64---"
 
-    prompt = f"""You are a cybersecurity analyst.
-The user asks: "Is this file safe?"
-
-Analyze ONLY based on the file content provided below (like a file was dragged into chat) and your own general security knowledge.
-Do not reference any external scan engines' verdicts or our internal scoring.
-Write in Turkish, concise but helpful (6–10 short lines).
+    prompt = f"""Is this file safe? Why or why not?
 
 {truncated_note}
 
-File name: {filename}
-File type: {ext}
-Signature (if applicable): signature_valid={verified}, publisher="{publisher}", app="{app_name}"
-VirusTotal hash lookup stats (optional context): {vt_malicious} malicious, {vt_suspicious} suspicious
-
 {file_content_block}
-
-Output format:
-- "Kısa cevap: ..."
-- 3–6 short bullet points (what you see in the content, e.g., does it execute commands, download, persistence, obfuscation, suspicious strings in comments vs active code).
-- "Öneri: ..." (one concrete next step)."""
+"""
 
     try:
         client = get_openai_client()

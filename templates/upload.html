@@ -944,6 +944,16 @@
             color: var(--danger);
         }
 
+        .risk-strong-safe {
+            font-weight: 800;
+            color: var(--safe);
+        }
+
+        .risk-strong-warn {
+            font-weight: 800;
+            color: var(--warn);
+        }
+
         .ghost-btn {
             width: 100%;
             padding: 11px;
@@ -1333,6 +1343,16 @@
 
         function renderAISecondOpinion(text) {
         const raw = (text || "").toString();
+        const lower = raw.toLowerCase();
+        const conclusionMatch = raw.match(/^\s*Conclusion:\s*(SAFE|SUSPICIOUS|MALICIOUS)\b/im);
+        const conclusion = conclusionMatch ? conclusionMatch[1].toUpperCase() : null;
+        const emphasisClass =
+          conclusion === "SAFE" ? "risk-strong-safe" :
+          conclusion === "SUSPICIOUS" ? "risk-strong-warn" :
+          conclusion === "MALICIOUS" ? "risk-strong" :
+          // fallback if format is off
+          (/\bmalicious|unsafe\b/.test(lower) ? "risk-strong" : (/\bsuspicious\b/.test(lower) ? "risk-strong-warn" : (/\bsafe\b/.test(lower) ? "risk-strong-safe" : "risk-strong")));
+
         // Escape HTML to avoid injection, then re-enable our simple formatting.
         const escaped = raw
           .replace(/&/g, "&amp;")
@@ -1342,7 +1362,7 @@
           .replace(/'/g, "&#039;");
 
         // Convert **bold** to red+bold emphasis.
-        const withEmphasis = escaped.replace(/\*\*(.+?)\*\*/g, "<span class=\"risk-strong\">$1</span>");
+        const withEmphasis = escaped.replace(/\*\*(.+?)\*\*/g, `<span class="${emphasisClass}">$1</span>`);
         // Newlines -> <br> for readability.
         return withEmphasis.replace(/\n/g, "<br>");
         }

@@ -459,9 +459,20 @@ def get_ai_file_review(filename: str, ext: str, file_data: bytes, vt_malicious: 
         file_content_block = f"---BEGIN FILE BASE64 (binary)---\n{b64}\n---END FILE BASE64---"
 
     prompt = f"""Is this file safe? Why or why not?
-Write in English and make it easy to scan (short paragraphs or bullets). No numbered lists, no preamble, no generic advice (e.g., "scan with antivirus/VirusTotal").
-Highlight the most important conclusion phrases by wrapping them in **double asterisks** (for red emphasis in the UI), e.g. **No harmful actions executed**.
-If you cannot determine safety from the provided content, say so plainly and state the most likely risk category based on what you can actually see.
+Write in English and follow this exact format (no extra sections, no preamble, no numbered lists, no generic advice like "scan with antivirus/VirusTotal"):
+
+Conclusion: SAFE | SUSPICIOUS | MALICIOUS
+
+- Bullet 1 (most important evidence)
+- Bullet 2
+- Bullet 3 (optional)
+- Bullet 4 (optional)
+
+Rules:
+- Choose the conclusion using your own judgment, independent of any scanner/tool verdicts.
+- Keep bullets concrete and grounded in the content (e.g., actual commands, downloads, persistence, obfuscation, whether suspicious strings are only in comments).
+- Wrap key phrases inside bullets with **double asterisks** for emphasis (the UI will color them based on the conclusion).
+- If content is truncated or insufficient, lean toward SUSPICIOUS and say what is missing.
 
 {truncated_note}
 

@@ -405,19 +405,23 @@ def get_ai_file_review(filename: str, ext: str, file_data: bytes, vt_malicious: 
 
     header_hex = _hex_preview(file_data, 256)
 
-    prompt = f"""You are a cybersecurity analyst giving a second opinion.
-Write in English. Maximum 2 short sentences.
+    prompt = f"""You are a helpful cybersecurity analyst.
+Answer as if the user just asked you: "Do you think this file is malicious? What would you do?"
+Write in English. Keep it concise but genuinely helpful (2–4 sentences).
 
-1) The first word MUST be one label: SAFE / SUSPICIOUS / MALICIOUS
-2) Then give one clear reason (no hedging).
-3) If the digital signature is valid, explicitly say it.
-4) Do NOT reference any "risk score" or our scanner's verdict; you are independent.
+Rules:
+- Be independent: do NOT reference any "risk score" or our scanner's verdict.
+- Do NOT over-focus on a single signal (e.g., signature). Weigh evidence holistically.
+- If evidence is limited or ambiguous, say so explicitly and give a cautious next step.
 
+Context (derived from the file and hash lookups):
 File: {filename} | Type: {ext} | Size: {round(len(file_data)/1024,1)} KB
 Signature: certified={certified}, signature_valid={verified}, publisher="{publisher}", app="{app_name}"
 VirusTotal (hash lookup): {vt_malicious} malicious, {vt_suspicious} suspicious
 Indicator strings found: {indicators if indicators else 'None'}
-Header hex (first 256 bytes): {header_hex if header_hex else 'N/A'}"""
+Header hex (first 256 bytes): {header_hex if header_hex else 'N/A'}
+
+Now give your best second-opinion assessment and one concrete next step (e.g., verify publisher, sandbox/VM, don't run)."""
 
     try:
         client = get_openai_client()
@@ -426,7 +430,7 @@ Header hex (first 256 bytes): {header_hex if header_hex else 'N/A'}"""
         r = client.chat.completions.create(
             model="gpt-4o-mini",
             messages=[{"role": "user", "content": prompt}],
-            max_tokens=140,
+            max_tokens=200,
             temperature=0.3,
         )
         return r.choices[0].message.content.strip()

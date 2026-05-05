@@ -471,20 +471,23 @@ def get_ai_file_review(filename: str, ext: str, file_data: bytes, vt_malicious: 
         "Intel Corporation",
     }
     trusted_context = ""
-    if verified and publisher:
+    # "certified" means the file is signed and VT is clean (per our pipeline), even if we couldn't fully validate the chain on this host.
+    # This is safe to use as a false-positive reducer for popular signed software; it should not affect EICAR/unverified samples.
+    if (verified or certified) and publisher:
         is_trusted = any(tp.lower() in publisher.lower() for tp in trusted_publishers)
         if is_trusted and vt_malicious == 0 and vt_suspicious == 0:
             trusted_context = f"""
 
-    Trusted publisher context (signature verified):
+    Trusted publisher context (signature trusted):
     - Application: {app_name or "Unknown"}
     - Publisher: {publisher}
-    - Signature Verified: Yes
+    - Digitally Signed: {"Yes" if certified else "No"}
+    - Signature Verified: {"Yes" if verified else "No"}
     - VirusTotal (hash lookup): {vt_malicious} malicious, {vt_suspicious} suspicious
 
     Additional guidance:
-    - If the signature is verified for a trusted publisher and you do not see malicious behavior in the provided content, classify as SAFE.
-    - Do NOT mark common legitimate software as suspicious just because it is a binary or looks encoded.
+    - If the file is signed by a well-known trusted publisher and no malicious behavior is visible in the provided content, classify as SAFE.
+    - Do NOT mark common legitimate software as suspicious just because it is a binary or because the content is represented as base64 here.
     """
 
     prompt = f"""You are a malware analyst. Analyze the file content like a human expert, not a keyword scanner.
